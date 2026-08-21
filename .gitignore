@@ -6,6 +6,11 @@ videos/
 frames/
 processed_frames/
 
+dataset/
+models/
+
+*.npy
+
 .keras/
 *.h5
 *.weights.h5

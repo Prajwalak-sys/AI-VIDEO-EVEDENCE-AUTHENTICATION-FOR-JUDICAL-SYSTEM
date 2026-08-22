@@ -1,32 +1,81 @@
+import os
 import numpy as np
-import tensorflow as tf
+
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Input, Bidirectional, LSTM, Dense, Dropout
+from tensorflow.keras.layers import (
+    Input,
+    Bidirectional,
+    LSTM,
+    Dense,
+    Dropout
+)
 
 
-def load_features():
+FEATURES_FILE = "fused_features.npy"
 
-    features = np.load("spatial_features.npy")
+FEATURES_PER_FRAME = 1283
 
-    print(f"Loaded feature shape: {features.shape}")
+
+def load_fused_features():
+
+    if not os.path.exists(FEATURES_FILE):
+
+        print(
+            "fused_features.npy not found."
+        )
+
+        print(
+            "Run feature_fusion.py first."
+        )
+
+        return None
+
+    features = np.load(
+        FEATURES_FILE
+    )
+
+    print(
+        f"Loaded fused feature shape: "
+        f"{features.shape}"
+    )
 
     return features
 
 
-def build_bilstm_model():
+def build_bilstm_model(
+    sequence_length,
+    feature_count
+):
 
     model = Sequential([
-        Input(shape=(None, 1280)),
+
+        Input(
+            shape=(
+                sequence_length,
+                feature_count
+            )
+        ),
 
         Bidirectional(
-            LSTM(64, return_sequences=False)
+            LSTM(
+                64,
+                return_sequences=False
+            )
         ),
 
         Dropout(0.3),
 
-        Dense(32, activation="relu"),
+        Dense(
+            32,
+            activation="relu"
+        ),
 
-        Dense(1, activation="sigmoid")
+        Dropout(0.2),
+
+        Dense(
+            1,
+            activation="sigmoid"
+        )
     ])
 
     model.compile(
@@ -40,15 +89,76 @@ def build_bilstm_model():
 
 if __name__ == "__main__":
 
-    print("Loading spatial features...")
+    print(
+        "Loading fused features..."
+    )
 
-    features = load_features()
+    features = load_fused_features()
 
-    print("Building BiLSTM model...")
+    if features is None:
 
-    model = build_bilstm_model()
+        raise SystemExit
 
-    print("BiLSTM model created successfully!")
+    if features.ndim != 2:
+
+        print(
+            "Unexpected feature format."
+        )
+
+        print(
+            "Expected: "
+            "(frames, features)"
+        )
+
+        raise SystemExit
+
+    sequence_length = features.shape[0]
+
+    feature_count = features.shape[1]
+
+    print(
+        f"Sequence length: "
+        f"{sequence_length}"
+    )
+
+    print(
+        f"Features per frame: "
+        f"{feature_count}"
+    )
+
+    if feature_count != FEATURES_PER_FRAME:
+
+        print(
+            "Warning: Expected "
+            f"{FEATURES_PER_FRAME} features "
+            f"but found {feature_count}."
+        )
+
+    # Add batch dimension
+    sequence = np.expand_dims(
+        features,
+        axis=0
+    )
+
+    print(
+        f"BiLSTM input shape: "
+        f"{sequence.shape}"
+    )
 
     print()
+    print(
+        "Building fusion-aware BiLSTM..."
+    )
+
+    model = build_bilstm_model(
+        sequence_length,
+        feature_count
+    )
+
+    print(
+        "Fusion-aware BiLSTM created successfully!"
+    )
+
+    print()
+
     model.summary()

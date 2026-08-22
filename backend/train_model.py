@@ -2,6 +2,8 @@ import os
 import numpy as np
 import tensorflow as tf
 
+from sklearn.model_selection import train_test_split
+
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import (
     Input,
@@ -80,9 +82,23 @@ def train_model():
     if X is None:
         return
 
-    if len(X) < 2:
-        print("Not enough videos for training.")
+    if len(X) < 4:
+        print("Not enough videos for train/test split.")
+        print("Add more labeled videos first.")
         return
+
+    # Split the dataset
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
+
+    print()
+    print(f"Training samples: {len(X_train)}")
+    print(f"Testing samples: {len(X_test)}")
 
     sequence_length = X.shape[1]
 
@@ -91,22 +107,35 @@ def train_model():
     )
 
     print()
-    print("BiLSTM model created.")
-    print()
+    print("BiLSTM model created successfully.")
 
+    print()
     model.summary()
 
     print()
     print("Starting training...")
 
-    model.fit(
-        X,
-        y,
+    history = model.fit(
+        X_train,
+        y_train,
         epochs=10,
         batch_size=4,
         validation_split=0.2,
         shuffle=True
     )
+
+    print()
+    print("Evaluating model on unseen test videos...")
+
+    loss, accuracy = model.evaluate(
+        X_test,
+        y_test,
+        verbose=1
+    )
+
+    print()
+    print(f"Test Loss: {loss:.4f}")
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
 
     os.makedirs(
         "models",
@@ -118,10 +147,9 @@ def train_model():
     )
 
     print()
-    print("Training completed!")
+    print("Model saved successfully!")
     print(
-        "Model saved to "
-        "models/zero_bilstm.keras"
+        "Location: models/zero_bilstm.keras"
     )
 
 

@@ -3,7 +3,10 @@ import numpy as np
 import os
 
 
-def calculate_optical_flow(previous_frame, current_frame):
+def calculate_optical_flow(
+    previous_frame,
+    current_frame
+):
 
     previous_gray = cv2.cvtColor(
         previous_frame,
@@ -33,12 +36,22 @@ def calculate_optical_flow(previous_frame, current_frame):
         flow[..., 1]
     )
 
-    motion_score = np.mean(magnitude)
+    motion_score = np.mean(
+        magnitude
+    )
 
     return float(motion_score)
 
 
-def process_frames(frames_folder):
+def process_frames(
+    frames_folder,
+    output_folder
+):
+
+    os.makedirs(
+        output_folder,
+        exist_ok=True
+    )
 
     frame_files = []
 
@@ -50,14 +63,18 @@ def process_frames(frames_folder):
             (".jpg", ".jpeg", ".png")
         ):
 
-            frame_files.append(filename)
+            frame_files.append(
+                filename
+            )
 
     scores = []
     frame_names = []
 
     if len(frame_files) < 2:
 
-        print("Not enough frames for optical flow.")
+        print(
+            "Not enough frames for optical flow."
+        )
 
         return (
             np.array(scores),
@@ -84,7 +101,10 @@ def process_frames(frames_folder):
             current_path
         )
 
-        if previous_frame is None or current_frame is None:
+        if (
+            previous_frame is None
+            or current_frame is None
+        ):
 
             previous_frame = current_frame
 
@@ -95,9 +115,13 @@ def process_frames(frames_folder):
             current_frame
         )
 
-        scores.append(score)
+        scores.append(
+            score
+        )
 
-        frame_names.append(filename)
+        frame_names.append(
+            filename
+        )
 
         print(
             f"{filename}: "
@@ -106,22 +130,43 @@ def process_frames(frames_folder):
 
         previous_frame = current_frame
 
-    return (
-        np.array(scores),
-        frame_names
+    scores = np.array(
+        scores,
+        dtype=np.float32
     )
+
+    np.save(
+        os.path.join(
+            output_folder,
+            "optical_flow_scores.npy"
+        ),
+        scores
+    )
+
+    np.save(
+        os.path.join(
+            output_folder,
+            "optical_flow_frame_names.npy"
+        ),
+        np.array(frame_names)
+    )
+
+    return scores, frame_names
 
 
 if __name__ == "__main__":
 
     frames_folder = "processed_frames"
 
+    output_folder = "analysis"
+
     print(
         "Starting Optical Flow analysis..."
     )
 
     scores, frame_names = process_frames(
-        frames_folder
+        frames_folder,
+        output_folder
     )
 
     print()
@@ -152,24 +197,9 @@ if __name__ == "__main__":
             f"{np.min(scores):.4f}"
         )
 
-    np.save(
-        "optical_flow_scores.npy",
-        scores
-    )
-
-    np.save(
-        "optical_flow_frame_names.npy",
-        np.array(frame_names)
-    )
-
     print()
 
     print(
-        "Optical Flow scores saved to "
-        "optical_flow_scores.npy"
-    )
-
-    print(
-        "Frame names saved to "
-        "optical_flow_frame_names.npy"
+        f"Optical Flow results saved to: "
+        f"{output_folder}"
     )

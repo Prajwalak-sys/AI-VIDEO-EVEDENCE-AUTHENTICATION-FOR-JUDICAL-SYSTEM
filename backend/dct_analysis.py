@@ -5,25 +5,19 @@ import os
 
 def calculate_dct_score(image):
 
-    # Convert image to grayscale
     gray = cv2.cvtColor(
         image,
         cv2.COLOR_BGR2GRAY
     )
 
-    # Convert to float for DCT
     gray = np.float32(gray)
 
-    # Apply DCT
     dct = cv2.dct(gray)
 
-    # Calculate magnitude of DCT coefficients
     magnitude = np.abs(dct)
 
-    # Ignore the DC coefficient at [0, 0]
     high_frequency = magnitude[1:, 1:]
 
-    # Calculate average high-frequency energy
     dct_score = np.mean(
         high_frequency
     )
@@ -31,7 +25,15 @@ def calculate_dct_score(image):
     return float(dct_score)
 
 
-def process_all_frames(frames_folder):
+def process_all_frames(
+    frames_folder,
+    output_folder
+):
+
+    os.makedirs(
+        output_folder,
+        exist_ok=True
+    )
 
     scores = []
     frame_names = []
@@ -68,25 +70,47 @@ def process_all_frames(frames_folder):
                 f"{score:.4f}"
             )
 
-    return (
-        np.array(scores),
-        frame_names
+    scores = np.array(
+        scores,
+        dtype=np.float32
     )
+
+    np.save(
+        os.path.join(
+            output_folder,
+            "dct_scores.npy"
+        ),
+        scores
+    )
+
+    np.save(
+        os.path.join(
+            output_folder,
+            "dct_frame_names.npy"
+        ),
+        np.array(frame_names)
+    )
+
+    return scores, frame_names
 
 
 if __name__ == "__main__":
 
     frames_folder = "processed_frames"
 
+    output_folder = "analysis"
+
     print(
         "Starting DCT analysis..."
     )
 
     scores, frame_names = process_all_frames(
-        frames_folder
+        frames_folder,
+        output_folder
     )
 
     print()
+
     print(
         "DCT analysis completed!"
     )
@@ -113,23 +137,9 @@ if __name__ == "__main__":
             f"{np.min(scores):.4f}"
         )
 
-    np.save(
-        "dct_scores.npy",
-        scores
-    )
-
-    np.save(
-        "dct_frame_names.npy",
-        np.array(frame_names)
-    )
-
     print()
-    print(
-        "DCT scores saved to "
-        "dct_scores.npy"
-    )
 
     print(
-        "Frame names saved to "
-        "dct_frame_names.npy"
+        f"DCT results saved to: "
+        f"{output_folder}"
     )

@@ -1,54 +1,5 @@
-import numpy as np
 import os
-
-
-SPATIAL_FILE = "spatial_features.npy"
-ELA_FILE = "ela_scores.npy"
-DCT_FILE = "dct_scores.npy"
-FLOW_FILE = "optical_flow_scores.npy"
-
-
-def load_features():
-
-    required_files = [
-        SPATIAL_FILE,
-        ELA_FILE,
-        DCT_FILE,
-        FLOW_FILE
-    ]
-
-    for file in required_files:
-
-        if not os.path.exists(file):
-
-            print(
-                f"Missing file: {file}"
-            )
-
-            return None
-
-    spatial = np.load(
-        SPATIAL_FILE
-    )
-
-    ela = np.load(
-        ELA_FILE
-    )
-
-    dct = np.load(
-        DCT_FILE
-    )
-
-    optical_flow = np.load(
-        FLOW_FILE
-    )
-
-    return (
-        spatial,
-        ela,
-        dct,
-        optical_flow
-    )
+import numpy as np
 
 
 def normalize_scores(scores):
@@ -57,30 +8,66 @@ def normalize_scores(scores):
     std = np.std(scores)
 
     if std == 0:
-
         return np.zeros_like(
             scores,
             dtype=np.float32
         )
 
-    normalized = (
-        scores - mean
-    ) / std
+    return (
+        (scores - mean) / std
+    ).astype(np.float32)
 
-    return normalized.astype(
-        np.float32
+
+def create_fused_features(
+    spatial_file,
+    analysis_folder
+):
+
+    ela_file = os.path.join(
+        analysis_folder,
+        "ela_scores.npy"
     )
 
+    dct_file = os.path.join(
+        analysis_folder,
+        "dct_scores.npy"
+    )
 
-def create_fused_features():
+    flow_file = os.path.join(
+        analysis_folder,
+        "optical_flow_scores.npy"
+    )
 
-    data = load_features()
+    required_files = [
+        spatial_file,
+        ela_file,
+        dct_file,
+        flow_file
+    ]
 
-    if data is None:
+    for file in required_files:
 
-        return
+        if not os.path.exists(file):
 
-    spatial, ela, dct, optical_flow = data
+            raise FileNotFoundError(
+                f"Missing file: {file}"
+            )
+
+    spatial = np.load(
+        spatial_file
+    )
+
+    ela = np.load(
+        ela_file
+    )
+
+    dct = np.load(
+        dct_file
+    )
+
+    optical_flow = np.load(
+        flow_file
+    )
 
     print(
         f"Spatial features: {spatial.shape}"
@@ -99,7 +86,6 @@ def create_fused_features():
         f"{optical_flow.shape}"
     )
 
-    # Find the number of common frames
     num_frames = min(
         len(spatial),
         len(ela),
@@ -108,13 +94,10 @@ def create_fused_features():
 
     if num_frames == 0:
 
-        print(
+        raise ValueError(
             "No common frames found."
         )
 
-        return
-
-    # Keep only matching frames
     spatial = spatial[
         :num_frames
     ]
@@ -127,8 +110,8 @@ def create_fused_features():
         :num_frames
     ]
 
-    # Optical flow has one fewer value
-    # because it describes frame-to-frame motion.
+    # Optical Flow has one fewer value
+    # because it represents frame transitions.
     if len(optical_flow) >= num_frames:
 
         flow = optical_flow[
@@ -154,14 +137,18 @@ def create_fused_features():
             dtype=np.float32
         )
 
-    # Normalize forensic scores
-    ela = normalize_scores(ela)
+    ela = normalize_scores(
+        ela
+    )
 
-    dct = normalize_scores(dct)
+    dct = normalize_scores(
+        dct
+    )
 
-    flow = normalize_scores(flow)
+    flow = normalize_scores(
+        flow
+    )
 
-    # Convert scores into column vectors
     ela = ela.reshape(
         num_frames,
         1
@@ -177,7 +164,6 @@ def create_fused_features():
         1
     )
 
-    # Combine all features
     fused_features = np.concatenate(
         [
             spatial,
@@ -186,6 +172,16 @@ def create_fused_features():
             flow
         ],
         axis=1
+    )
+
+    output_file = os.path.join(
+        analysis_folder,
+        "fused_features.npy"
+    )
+
+    np.save(
+        output_file,
+        fused_features
     )
 
     print()
@@ -198,16 +194,8 @@ def create_fused_features():
         f"{fused_features.shape}"
     )
 
-    np.save(
-        "fused_features.npy",
-        fused_features
-    )
-
     print(
-        "Saved to fused_features.npy"
+        f"Saved to: {output_file}"
     )
 
-
-if __name__ == "__main__":
-
-    create_fused_features()
+    return fused_features

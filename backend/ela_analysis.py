@@ -16,7 +16,10 @@ def calculate_ela(image):
     compressed = cv2.imread(temp_path)
 
     if compressed is None:
-        os.remove(temp_path)
+
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
         return 0.0
 
     difference = cv2.absdiff(
@@ -33,12 +36,21 @@ def calculate_ela(image):
         ela_image
     )
 
-    os.remove(temp_path)
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
 
     return float(ela_score)
 
 
-def process_all_frames(frames_folder):
+def process_all_frames(
+    frames_folder,
+    output_folder
+):
+
+    os.makedirs(
+        output_folder,
+        exist_ok=True
+    )
 
     scores = []
     frame_names = []
@@ -75,22 +87,43 @@ def process_all_frames(frames_folder):
                 f"{score:.4f}"
             )
 
-    return (
-        np.array(scores),
-        frame_names
+    scores = np.array(
+        scores,
+        dtype=np.float32
     )
+
+    np.save(
+        os.path.join(
+            output_folder,
+            "ela_scores.npy"
+        ),
+        scores
+    )
+
+    np.save(
+        os.path.join(
+            output_folder,
+            "ela_frame_names.npy"
+        ),
+        np.array(frame_names)
+    )
+
+    return scores, frame_names
 
 
 if __name__ == "__main__":
 
     frames_folder = "processed_frames"
 
+    output_folder = "analysis"
+
     print(
         "Starting ELA analysis..."
     )
 
     scores, frame_names = process_all_frames(
-        frames_folder
+        frames_folder,
+        output_folder
     )
 
     print()
@@ -120,23 +153,8 @@ if __name__ == "__main__":
             f"{np.min(scores):.4f}"
         )
 
-    np.save(
-        "ela_scores.npy",
-        scores
-    )
-
-    np.save(
-        "ela_frame_names.npy",
-        np.array(frame_names)
-    )
-
     print()
     print(
-        "ELA scores saved to "
-        "ela_scores.npy"
-    )
-
-    print(
-        "Frame names saved to "
-        "ela_frame_names.npy"
+        f"ELA results saved to: "
+        f"{output_folder}"
     )

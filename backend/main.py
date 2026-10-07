@@ -1,13 +1,17 @@
 from fastapi import FastAPI, UploadFile, File
 import os
 import shutil
+import numpy as np
 
 from backend.video_processor import (
     extract_frames,
     get_video_info
 )
 
-from backend.spatial_analysis import extract_features
+from backend.spatial_analysis import (
+    load_model,
+    process_all_frames
+)
 
 from backend.ela_analysis import (
     process_all_frames as process_ela
@@ -38,12 +42,20 @@ from backend.forensic_result import (
 )
 
 
+# ============================================================
+# FASTAPI APPLICATION
+# ============================================================
+
 app = FastAPI(
     title="ZERO Video Evidence API",
     description="AI-powered video evidence authentication system",
     version="1.0.0"
 )
 
+
+# ============================================================
+# FOLDERS
+# ============================================================
 
 VIDEO_FOLDER = "videos"
 FRAME_FOLDER = "frames"
@@ -66,31 +78,41 @@ os.makedirs(
 )
 
 
+# ============================================================
+# HOME
+# ============================================================
+
 @app.get("/")
 def home():
 
     return {
-        "message":
-            "ZERO Video Evidence API is running",
-        "status":
-            "online"
+        "message": "ZERO Video Evidence API is running",
+        "status": "online"
     }
 
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
 
 @app.get("/health")
 def health_check():
 
     return {
-        "status":
-            "healthy"
+        "status": "healthy"
     }
 
+
+# ============================================================
+# UPLOAD VIDEO
+# ============================================================
 
 @app.post("/upload-video")
 async def upload_video(
     file: UploadFile = File(...)
 ):
 
+    # Save video
     video_path = os.path.join(
         VIDEO_FOLDER,
         file.filename
@@ -106,20 +128,24 @@ async def upload_video(
             video
         )
 
+    # Video name without extension
     video_name = os.path.splitext(
         file.filename
     )[0]
 
+    # Frame folder
     frames_folder = os.path.join(
         FRAME_FOLDER,
         video_name
     )
 
+    # Extract frames
     total_frames = extract_frames(
         video_path,
         frames_folder
     )
 
+    # Get video information
     fps, total, width, height, duration = (
         get_video_info(
             video_path
@@ -154,14 +180,23 @@ async def upload_video(
     }
 
 
+# ============================================================
+# COMPLETE FORENSIC ANALYSIS
+# ============================================================
+
 @app.post("/analyze-video")
 async def analyze_video(
     file: UploadFile = File(...)
 ):
 
-    # ---------------------------------------------
-    # 1. Save video
-    # ---------------------------------------------
+    # ========================================================
+    # 1. SAVE VIDEO
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("ZERO FORENSIC ANALYSIS STARTED")
+    print("=" * 60)
 
     video_path = os.path.join(
         VIDEO_FOLDER,
@@ -178,13 +213,19 @@ async def analyze_video(
             video
         )
 
+    print()
+    print(
+        f"Video saved: {video_path}"
+    )
+
+
+    # ========================================================
+    # 2. CREATE VIDEO-SPECIFIC FOLDERS
+    # ========================================================
+
     video_name = os.path.splitext(
         file.filename
     )[0]
-
-    # ---------------------------------------------
-    # 2. Create video-specific folders
-    # ---------------------------------------------
 
     frames_folder = os.path.join(
         FRAME_FOLDER,
@@ -197,27 +238,46 @@ async def analyze_video(
     )
 
     os.makedirs(
+        frames_folder,
+        exist_ok=True
+    )
+
+    os.makedirs(
         analysis_folder,
         exist_ok=True
     )
 
-    # ---------------------------------------------
-    # 3. Extract frames
-    # ---------------------------------------------
+    print(
+        f"Frames folder: {frames_folder}"
+    )
+
+    print(
+        f"Analysis folder: {analysis_folder}"
+    )
+
+
+    # ========================================================
+    # 3. EXTRACT VIDEO FRAMES
+    # ========================================================
 
     print()
-    print(
-        "Extracting frames..."
-    )
+    print("=" * 60)
+    print("STEP 1: FRAME EXTRACTION")
+    print("=" * 60)
 
     total_frames = extract_frames(
         video_path,
         frames_folder
     )
 
-    # ---------------------------------------------
-    # 4. Get video information
-    # ---------------------------------------------
+    print(
+        f"Total frames extracted: {total_frames}"
+    )
+
+
+    # ========================================================
+    # 4. VIDEO INFORMATION
+    # ========================================================
 
     fps, total, width, height, duration = (
         get_video_info(
@@ -225,21 +285,50 @@ async def analyze_video(
         )
     )
 
-    print(
-        f"Total frames: {total_frames}"
-    )
-
+    print()
+    print("Video Information")
     print(
         f"FPS: {fps}"
     )
+    print(
+        f"Total frames: {total}"
+    )
+    print(
+        f"Resolution: {width} x {height}"
+    )
+    print(
+        f"Duration: {duration:.2f} seconds"
+    )
 
-    # ---------------------------------------------
-    # 5. MobileNetV2 spatial features
-    # ---------------------------------------------
+
+    # ========================================================
+    # 5. SPATIAL ANALYSIS - MOBILENETV2
+    # ========================================================
 
     print()
+    print("=" * 60)
+    print("STEP 2: SPATIAL ANALYSIS - MOBILENETV2")
+    print("=" * 60)
+
+    print(
+        "Loading MobileNetV2..."
+    )
+
+    model = load_model()
+
+    print(
+        "MobileNetV2 loaded successfully!"
+    )
+
     print(
         "Extracting spatial features..."
+    )
+
+    spatial_features, spatial_frame_names = (
+        process_all_frames(
+            model,
+            frames_folder
+        )
     )
 
     spatial_file = os.path.join(
@@ -247,15 +336,31 @@ async def analyze_video(
         "spatial_features.npy"
     )
 
-    spatial_features = extract_features(
-        frames_folder
+    spatial_names_file = os.path.join(
+        analysis_folder,
+        "spatial_frame_names.npy"
     )
-
-    import numpy as np
 
     np.save(
         spatial_file,
         spatial_features
+    )
+
+    np.save(
+        spatial_names_file,
+        np.array(
+            spatial_frame_names
+        )
+    )
+
+    print()
+    print(
+        "Spatial feature extraction completed!"
+    )
+
+    print(
+        f"Spatial feature shape: "
+        f"{spatial_features.shape}"
     )
 
     print(
@@ -263,42 +368,57 @@ async def analyze_video(
         f"{spatial_file}"
     )
 
-    # ---------------------------------------------
-    # 6. ELA
-    # ---------------------------------------------
+
+    # ========================================================
+    # 6. ELA ANALYSIS
+    # ========================================================
 
     print()
-    print(
-        "Running ELA analysis..."
-    )
+    print("=" * 60)
+    print("STEP 3: ELA ANALYSIS")
+    print("=" * 60)
 
     ela_scores, ela_names = process_ela(
         frames_folder,
         analysis_folder
     )
 
-    # ---------------------------------------------
-    # 7. DCT
-    # ---------------------------------------------
-
     print()
     print(
-        "Running DCT analysis..."
+        f"ELA frames analyzed: "
+        f"{len(ela_scores)}"
     )
+
+
+    # ========================================================
+    # 7. DCT ANALYSIS
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("STEP 4: DCT ANALYSIS")
+    print("=" * 60)
 
     dct_scores, dct_names = process_dct(
         frames_folder,
         analysis_folder
     )
 
-    # ---------------------------------------------
-    # 8. Optical Flow
-    # ---------------------------------------------
-
     print()
     print(
-        "Running Optical Flow analysis..."
+        f"DCT frames analyzed: "
+        f"{len(dct_scores)}"
     )
+
+
+    # ========================================================
+    # 8. OPTICAL FLOW
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("STEP 5: OPTICAL FLOW ANALYSIS")
+    print("=" * 60)
 
     flow_scores, flow_names = (
         process_optical_flow(
@@ -307,28 +427,42 @@ async def analyze_video(
         )
     )
 
-    # ---------------------------------------------
-    # 9. Feature Fusion
-    # ---------------------------------------------
-
     print()
     print(
-        "Running feature fusion..."
+        f"Optical Flow transitions analyzed: "
+        f"{len(flow_scores)}"
     )
+
+
+    # ========================================================
+    # 9. FEATURE FUSION
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("STEP 6: FEATURE FUSION")
+    print("=" * 60)
 
     fused_features = create_fused_features(
         spatial_file,
         analysis_folder
     )
 
-    # ---------------------------------------------
-    # 10. Anomaly Detection
-    # ---------------------------------------------
-
     print()
     print(
-        "Running anomaly detection..."
+        f"Fused feature shape: "
+        f"{fused_features.shape}"
     )
+
+
+    # ========================================================
+    # 10. ANOMALY DETECTION
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("STEP 7: ANOMALY DETECTION")
+    print("=" * 60)
 
     anomaly_scores, suspicious_frames = (
         detect_anomalies(
@@ -337,14 +471,21 @@ async def analyze_video(
         )
     )
 
-    # ---------------------------------------------
-    # 11. Suspicious Regions
-    # ---------------------------------------------
-
     print()
     print(
-        "Finding suspicious regions..."
+        f"Suspicious frames: "
+        f"{len(suspicious_frames)}"
     )
+
+
+    # ========================================================
+    # 11. SUSPICIOUS REGIONS
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("STEP 8: SUSPICIOUS REGION DETECTION")
+    print("=" * 60)
 
     suspicious_regions = (
         analyze_suspicious_regions(
@@ -353,23 +494,36 @@ async def analyze_video(
         )
     )
 
-    # ---------------------------------------------
-    # 12. Final forensic result
-    # ---------------------------------------------
-
     print()
     print(
-        "Creating forensic result..."
+        f"Suspicious regions: "
+        f"{len(suspicious_regions)}"
     )
+
+
+    # ========================================================
+    # 12. FINAL FORENSIC RESULT
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("STEP 9: FINAL FORENSIC RESULT")
+    print("=" * 60)
 
     result = create_forensic_result(
         video_path,
         analysis_folder
     )
 
-    # ---------------------------------------------
-    # 13. Return result
-    # ---------------------------------------------
+
+    # ========================================================
+    # 13. FINAL RESPONSE
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("ZERO FORENSIC ANALYSIS COMPLETED")
+    print("=" * 60)
 
     return {
 
